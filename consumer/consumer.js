@@ -3,13 +3,15 @@ const path = require("path");
 const amqp = require("amqplib");
 const dotenv = require("dotenv");
 
-const { generateVideo, downloadImages, deleteFiles } = require("./helper");
+const { generateVideo, downloadImages, deleteFiles, combineVideos } = require("./helper");
 
 // Load env vars
 dotenv.config();
 
 const VIDEOS_DIR = path.join(__dirname, "./videos");
 const IMAGES_DIR = path.join(__dirname, "./images");
+
+let jobsStatus = {};
 
 async function consumeFromQueue() {
   const connection = await amqp.connect(process.env.RABBITMQ_URL);
@@ -22,7 +24,7 @@ async function consumeFromQueue() {
     const job = JSON.parse(message.content.toString());
 
     try {
-      const { userId, jobIdentifier, imageUrls, id } = job;
+      const { userId, jobIdentifier, imageUrls, id, jobOrder, totalJobs } = job;
       console.log(`Received job from queue: ${JSON.stringify(job)}`);
 
       // Create user base directories if they don't exist
@@ -42,10 +44,24 @@ async function consumeFromQueue() {
         fs.mkdirSync(videosUserJobIdDir);
       }
 
-      // const videosJobDir = path.join(videosUserJobIdDir, jobIdentifier);
-      // if (!fs.existsSync(videosJobDir)) {
-      //   fs.mkdirSync(videosJobDir);
-      // }
+      const videosJobDir = path.join(videosUserJobIdDir, jobIdentifier);
+      if (!fs.existsSync(videosJobDir)) {
+        fs.mkdirSync(videosJobDir);
+      }
+      
+      if (id in jobsStatus) {
+        jobsStatus[id][jobIdentifier] = {
+          jobOrder: jobOrder,
+          status: 0
+        }
+      }
+      else {
+        jobsStatus[id] = {}
+        jobsStatus[id][jobIdentifier] = {
+          jobOrder: jobOrder,
+          status: 0
+        }
+      }
 
       // Create image directories
       const imagesJobDir = path.join(imagesUserBase, jobIdentifier);
@@ -56,20 +72,60 @@ async function consumeFromQueue() {
       // Download images
       const imagePaths = await downloadImages(imageUrls, imagesJobDir);
 
-      const videoPath = await generateVideo(imagesJobDir, videosUserJobIdDir);
+      const videoPath = await generateVideo(imagesJobDir, videosJobDir);
 
       // Delete images
       deleteFiles(...imagePaths);
       fs.rmdirSync(imagesJobDir);
 
+      // Update job status
+      jobsStatus[id][jobIdentifier].status = 1
+
+      // Check if all jobs are complete
+      let allJobsComplete = true
+      for (const jobIdentifier in jobsStatus[id]) {
+        if (jobsStatus[id][jobIdentifier].status == 0) {
+          allJobsComplete = false
+          break
+        }
+      }
+
+      if (allJobsComplete) {
+        console.log(`All jobs complete for user ${userId}, job ${id}`)
+        // Generate video paths according to job order
+        const videoPaths = []
+        for (let i = 0; i < totalJobs; i++) {
+          for (const jobIdentifier in jobsStatus[id]) {
+            if (jobsStatus[id][jobIdentifier].jobOrder == i) {
+              videoPaths.push(path.join(videosUserJobIdDir, jobIdentifier, 'output.mp4'))
+            }
+          }
+        }
+
+        //create input.txt with video paths
+        const inputFilePath = path.join(videosUserJobIdDir, 'input.txt')
+        fs.writeFileSync(inputFilePath, videoPaths.map(videoPath => `file '${videoPath}'`).join('\n'))
+
+        // Combine videos
+        const outputVideoPath = path.join(videosUserJobIdDir, 'output.mp4')
+        await combineVideos(inputFilePath, outputVideoPath)
+        console.log(`Video combined for user ${userId}, job ${id}`)
+        deleteFiles(inputFilePath, ...videoPaths)
+
+        // Delete job from jobsStatus
+        delete jobsStatus[id]
+      }
       console.log(
         `Video processing complete for user ${userId}, job ${id}`
       );
+
     } catch (error) {
       console.error(`Error processing video: ${error.message}`);
     }
+    finally {
+      channel.ack(message);
+    }
 
-    channel.ack(message);
   });
 }
 

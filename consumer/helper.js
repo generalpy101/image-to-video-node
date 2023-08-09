@@ -23,15 +23,7 @@ async function downloadImages(imageUrls, downloadPath) {
 // Function to generate video from images
 function generateVideo(imagesPathBase, videoPath) {
   return new Promise((resolve, reject) => {
-    let cmd;
-    if (!fs.existsSync(`${videoPath}/output.mp4`)) {
-      cmd = `ffmpeg -r 1 -s 1920x1080 -i "${imagesPathBase}/image_%d.jpg" ${videoPath}/output.mp4`;
-      console.log("Video not found, generating new one")
-    }
-    else {
-      cmd = `ffmpeg -i ${videoPath}/output.mp4 -f image2 -r 1 -i "${imagesPathBase}/image_%d.jpg" -filter_complex "[0:v][1:v]concat=n=2:v=1:a=0 [v]" -map "[v]" ${videoPath}/output.mp4`;
-      console.log("Video found, updating")
-    }
+    let cmd = `ffmpeg -r 1 -s 1920x1080 -i "${imagesPathBase}/image_%d.jpg" ${videoPath}/output.mp4`;
 
     exec(cmd, (error, stdout, stderr) => {
       if (error) {
@@ -43,9 +35,23 @@ function generateVideo(imagesPathBase, videoPath) {
   });
 }
 
+function combineVideos(videoInputTxtPath, outputVideoPath) {
+  return new Promise((resolve, reject) => {
+    let cmd = `ffmpeg -f concat -safe 0 -i ${videoInputTxtPath} -c copy ${outputVideoPath}`;
+
+    exec(cmd, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(`Error combining videos: ${error.message}`));
+      } else {
+        resolve(outputVideoPath);
+      }
+    }
+    );
+  });
+}
+
 // Function to delete files
 function deleteFiles(...filePaths) {
-    console.log(filePaths)
   filePaths.forEach(filePath => {
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
@@ -56,5 +62,6 @@ function deleteFiles(...filePaths) {
 module.exports = {
     generateVideo,
     downloadImages,
-    deleteFiles
+    deleteFiles,
+    combineVideos
 }

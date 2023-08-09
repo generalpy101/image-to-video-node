@@ -30,6 +30,8 @@ async function sendToQueue(userId, imageUrls) {
       jobIdentifier: generateRandomString(10),
       imageUrls: chunk,
       id: currentEpochMilliseconds,
+      jobOrder: i / CHUNK_SIZE,
+      totalJobs: Math.ceil(imageUrls.length / CHUNK_SIZE)
     };
 
     try {
