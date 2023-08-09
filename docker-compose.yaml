@@ -18,6 +18,8 @@ services:
       RABBITMQ_QUEUE_NAME: image_events
       RABBITMQ_URL: amqp://admin:password@rabbitmq:5672/?heartbeat=0
       RABBITMQ_EXCHANGE: all_events
+    env_file:
+      - ./config/aws.env
     volumes:
       - ./consumer:/app/consumer:rw
     depends_on:

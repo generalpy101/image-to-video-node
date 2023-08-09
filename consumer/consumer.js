@@ -3,10 +3,12 @@ const path = require("path");
 const amqp = require("amqplib");
 const dotenv = require("dotenv");
 
-const { generateVideo, downloadImages, deleteFiles, combineVideos } = require("./helper");
+const { generateVideo, downloadImages, deleteFiles, combineVideos, uploadFileToS3 } = require("./helper");
 
 // Load env vars
 dotenv.config();
+
+const BUCKET_NAME = process.env.AWS_BUCKET_NAME;
 
 const VIDEOS_DIR = path.join(__dirname, "./videos");
 const IMAGES_DIR = path.join(__dirname, "./images");
@@ -112,6 +114,9 @@ async function consumeFromQueue() {
         console.log(`Video combined for user ${userId}, job ${id}`)
         deleteFiles(inputFilePath, ...videoPaths)
 
+        // Upload video to S3
+        const s3VideoPath = `${userId}/${id}/output.mp4`
+        await uploadFileToS3(outputVideoPath, s3VideoPath, BUCKET_NAME)
         // Delete job from jobsStatus
         delete jobsStatus[id]
       }

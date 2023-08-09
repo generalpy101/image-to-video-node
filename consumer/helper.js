@@ -2,7 +2,34 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const { exec } = require('child_process');
+const AWS = require('aws-sdk');
 
+AWS.config.update({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
+
+
+const s3 = new AWS.S3();
+
+// Function to upload file to S3
+function uploadFileToS3(sourceFilePath, destFilePath, bucketName) {
+  const params = {
+    Bucket: bucketName,
+    Key: destFilePath,
+    Body: fs.createReadStream(sourceFilePath)
+  };
+
+  try {
+    const data = s3.upload(params).promise();
+    console.log(data.Location)
+    return data;
+  }
+  catch (error) {
+    console.log(error);
+  }
+}
 
 // Function to download images from URLs
 async function downloadImages(imageUrls, downloadPath) {
@@ -63,5 +90,6 @@ module.exports = {
     generateVideo,
     downloadImages,
     deleteFiles,
-    combineVideos
+    combineVideos,
+    uploadFileToS3
 }
