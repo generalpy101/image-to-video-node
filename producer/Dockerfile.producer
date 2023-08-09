@@ -1,0 +1,22 @@
+# Use an official Node.js runtime as the base image
+FROM node:14
+
+# Set the working directory
+WORKDIR /app
+
+# Copy package.json and package-lock.json to install dependencies
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy producer source code
+COPY . .
+
+# Exposing 8081 for producer
+EXPOSE 8081
+
+ENV PORT=8081
+
+# Set the entry point command to start your API
+CMD ["node", "producer.js"]

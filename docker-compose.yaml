@@ -1,0 +1,55 @@
+version: '3'
+services:
+  rabbitmq:
+    image: rabbitmq:3.8.9-management-alpine
+    restart: unless-stopped
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=password
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+  
+  consumer:
+    image: app
+    restart: unless-stopped
+    command: npm run consumer
+    environment:
+      RABBITMQ_QUEUE_NAME: image_events
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672/?heartbeat=0
+      RABBITMQ_EXCHANGE: all_events
+    volumes:
+      - ./consumer:/app/consumer:rw
+    depends_on:
+      - rabbitmq
+  
+  producer:
+    image: app
+    restart: unless-stopped
+    command: npm run producer
+    environment:
+      RABBITMQ_QUEUE_NAME: image_events
+      RABBITMQ_URL: amqp://admin:password@rabbitmq:5672/?heartbeat=0
+      RABBITMQ_EXCHANGE: all_events
+    ports:
+      - '8081:8081'
+    volumes:
+      - ./producer:/app/producer:rw
+    depends_on:
+      - rabbitmq
+
+  api:
+    image: app
+    build: .
+    command: npm start
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - PRODUCER_URL=http://producer:8081
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./api:/app/api:rw
+    depends_on:
+      - producer
+      - consumer
